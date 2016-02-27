@@ -1,0 +1,1 @@
+@ stub vk_icdGetInstanceProcAddr

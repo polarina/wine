@@ -1,0 +1,2 @@
+MODULE    = vulkan-icd.dll
+IMPORTLIB = vulkan-icd
