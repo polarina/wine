@@ -30,6 +30,8 @@
 
 #include "icd.h"
 
+#define SONAME_LIBVULKAN "libvulkan.so.1"
+
 WINE_DEFAULT_DEBUG_CHANNEL(vulkan_icd);
 
 static int compar(const void *elt_a, const void *elt_b)
@@ -39,7 +41,127 @@ static int compar(const void *elt_a, const void *elt_b)
 		((const vulkan_function *) elt_b)->pName);
 }
 
+static void load_global_pfn(
+	PFN_vkGetInstanceProcAddr  get,
+	vulkan_global_pfn         *pfn)
+{
+	#define GET(f) pfn->f = (PFN_##f)get(NULL, #f)
+
+	GET(vkCreateInstance);
+
+	#undef GET
+}
+
+static void load_instance_pfn(
+	VkInstance                 instance,
+	PFN_vkGetInstanceProcAddr  get,
+	vulkan_instance_pfn       *pfn)
+{
+	#define GET(f) pfn->f = (PFN_##f)get(instance, #f)
+
+	GET(vkDestroyInstance);
+
+	#undef GET
+}
+
+VkResult WINAPI vkCreateInstance(
+	const VkInstanceCreateInfo  *pCreateInfo,
+	const VkAllocationCallbacks *pAllocator,
+	VkInstance                  *pInstance)
+{
+	VkInstance instance;
+	VkResult result;
+	VkAllocationCallbacks callbacks;
+	struct allocator allocator;
+	PFN_vkGetInstanceProcAddr pfn_vkGetInstanceProcAddr;
+
+	TRACE("(%p, %p, %p)\n", pCreateInfo, pAllocator, pInstance);
+
+	if (pCreateInfo->enabledLayerCount > 0)
+		return VK_ERROR_LAYER_NOT_PRESENT;
+
+	if (pCreateInfo->enabledExtensionCount > 0)
+		return VK_ERROR_EXTENSION_NOT_PRESENT;
+
+	instance = allocator_allocate(
+		allocator_initialize(pAllocator, NULL, &allocator),
+		sizeof(*instance),
+		8, /* alignof(*instance) */
+		VK_SYSTEM_ALLOCATION_SCOPE_INSTANCE);
+
+	if (instance == NULL)
+		return VK_ERROR_OUT_OF_HOST_MEMORY;
+
+	set_loader_magic_value(&instance->loader_data);
+	instance->pAllocator = allocator_initialize(pAllocator, NULL, &instance->allocator);
+	instance->libvulkan_handle = wine_dlopen(SONAME_LIBVULKAN, RTLD_NOW, NULL, 0);
+
+	if (instance->libvulkan_handle == NULL)
+	{
+		WARN("Vulkan loader not found (%s)\n", SONAME_LIBVULKAN);
+		allocator_free(instance->pAllocator, instance);
+
+		return VK_ERROR_INITIALIZATION_FAILED;
+	}
+
+	pfn_vkGetInstanceProcAddr = wine_dlsym(
+		instance->libvulkan_handle, "vkGetInstanceProcAddr", NULL, 0);
+
+	if (pfn_vkGetInstanceProcAddr == NULL)
+	{
+		WARN("Could not dlsym vkGetInstanceProcAddr (%s)\n", SONAME_LIBVULKAN);
+
+		wine_dlclose(instance->libvulkan_handle, NULL, 0);
+		allocator_free(instance->pAllocator, instance);
+
+		return VK_ERROR_INITIALIZATION_FAILED;
+	}
+
+	load_global_pfn(pfn_vkGetInstanceProcAddr, &instance->pfng);
+
+	result = instance->pfng.vkCreateInstance(
+		pCreateInfo,
+		allocator_callbacks(instance->pAllocator, &callbacks),
+		&instance->instance);
+
+	if (result != VK_SUCCESS)
+	{
+		wine_dlclose(instance->libvulkan_handle, NULL, 0);
+		allocator_free(instance->pAllocator, instance);
+
+		return result;
+	}
+
+	load_instance_pfn(instance->instance, pfn_vkGetInstanceProcAddr, &instance->pfn);
+
+	*pInstance = instance;
+
+	return VK_SUCCESS;
+}
+
+void WINAPI vkDestroyInstance(
+	VkInstance                   instance,
+	const VkAllocationCallbacks *pAllocator)
+{
+	struct allocator *allocatorp;
+	struct allocator allocator;
+	VkAllocationCallbacks callbacks;
+
+	TRACE("(%p, %p)\n", instance, pAllocator);
+
+	allocatorp = allocator_initialize(pAllocator, NULL, &allocator);
+
+	instance->pfn.vkDestroyInstance(
+		instance->instance,
+		allocator_callbacks(allocatorp, &callbacks));
+
+	wine_dlclose(instance->libvulkan_handle, NULL, 0);
+	allocator_free(allocatorp, instance);
+}
+
 static const vulkan_function vulkan_instance_functions[] = {
+	{ "vkCreateInstance", vkCreateInstance },
+	{ "vkDestroyInstance", vkDestroyInstance },
 };
 
 static const size_t vulkan_instance_function_count =

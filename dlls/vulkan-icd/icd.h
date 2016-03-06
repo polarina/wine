@@ -11,6 +11,26 @@
 #include "allocator.h"
 
 typedef struct {
+	PFN_vkCreateInstance vkCreateInstance;
+} vulkan_global_pfn;
+
+typedef struct {
+	PFN_vkDestroyInstance vkDestroyInstance;
+} vulkan_instance_pfn;
+
+struct VkInstance_T {
+	VK_LOADER_DATA loader_data;
+	void *libvulkan_handle;
+	VkInstance instance;
+
+	struct allocator *pAllocator;
+	struct allocator allocator;
+
+	vulkan_global_pfn pfng;
+	vulkan_instance_pfn pfn;
+};
+
+typedef struct {
 	const char *pName;
 	void *pfn;
 } vulkan_function;
