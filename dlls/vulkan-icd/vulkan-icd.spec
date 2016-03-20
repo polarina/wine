@@ -1,1 +1,1 @@
-@ stub vk_icdGetInstanceProcAddr
+@ stdcall vk_icdGetInstanceProcAddr(ptr ptr)

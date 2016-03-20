@@ -1,2 +1,5 @@
 MODULE    = vulkan-icd.dll
 IMPORTLIB = vulkan-icd
+
+C_SRCS = \
+	icd.c
