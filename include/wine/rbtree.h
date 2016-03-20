@@ -34,9 +34,8 @@ struct wine_rb_entry
 
 struct wine_rb_stack
 {
-    struct wine_rb_entry ***entries;
     size_t count;
-    size_t size;
+    struct wine_rb_entry **entries[2 * sizeof(void *) * 8];
 };
 
 struct wine_rb_functions
@@ -69,25 +68,6 @@ static inline void wine_rb_stack_clear(struct wine_rb_stack *stack)
 static inline void wine_rb_stack_push(struct wine_rb_stack *stack, struct wine_rb_entry **entry)
 {
     stack->entries[stack->count++] = entry;
-}
-
-static inline int wine_rb_ensure_stack_size(struct wine_rb_tree *tree, size_t size)
-{
-    struct wine_rb_stack *stack = &tree->stack;
-
-    if (size > stack->size)
-    {
-        size_t new_size = stack->size << 1;
-        struct wine_rb_entry ***new_entries = tree->functions->realloc(stack->entries,
-                new_size * sizeof(*stack->entries));
-
-        if (!new_entries) return -1;
-
-        stack->entries = new_entries;
-        stack->size = new_size;
-    }
-
-    return 0;
 }
 
 static inline int wine_rb_is_red(struct wine_rb_entry *entry)
@@ -206,10 +186,6 @@ static inline int wine_rb_init(struct wine_rb_tree *tree, const struct wine_rb_f
 {
     tree->functions = functions;
     tree->root = NULL;
-
-    tree->stack.entries = functions->alloc(16 * sizeof(*tree->stack.entries));
-    if (!tree->stack.entries) return -1;
-    tree->stack.size = 16;
     tree->stack.count = 0;
 
     return 0;
@@ -230,7 +206,6 @@ static inline void wine_rb_clear(struct wine_rb_tree *tree, wine_rb_traverse_fun
 static inline void wine_rb_destroy(struct wine_rb_tree *tree, wine_rb_traverse_func_t *callback, void *context)
 {
     wine_rb_clear(tree, callback, context);
-    tree->functions->free(tree->stack.entries);
 }
 
 static inline struct wine_rb_entry *wine_rb_get(const struct wine_rb_tree *tree, const void *key)
@@ -266,13 +241,6 @@ static inline int wine_rb_put(struct wine_rb_tree *tree, const void *key, struct
         }
         else if (c < 0) parent = &(*parent)->left;
         else parent = &(*parent)->right;
-    }
-
-    /* After insertion, the path length to any node should be <= (black_height + 1) * 2. */
-    if (wine_rb_ensure_stack_size(tree, black_height << 1) == -1)
-    {
-        wine_rb_stack_clear(&tree->stack);
-        return -1;
     }
 
     entry->flags = WINE_RB_FLAG_RED;
