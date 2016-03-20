@@ -8,6 +8,8 @@
 #include "vk_icd.h"
 #include "vulkan.h"
 
+#include "allocator.h"
+
 typedef struct {
 	const char *pName;
 	void *pfn;

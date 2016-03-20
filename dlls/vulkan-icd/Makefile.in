@@ -2,4 +2,5 @@ MODULE    = vulkan-icd.dll
 IMPORTLIB = vulkan-icd
 
 C_SRCS = \
+	allocator.c \
 	icd.c
