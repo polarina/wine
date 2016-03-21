@@ -22,6 +22,7 @@ typedef struct {
 	PFN_vkGetPhysicalDeviceMemoryProperties vkGetPhysicalDeviceMemoryProperties;
 	PFN_vkGetPhysicalDeviceProperties vkGetPhysicalDeviceProperties;
 	PFN_vkGetPhysicalDeviceQueueFamilyProperties vkGetPhysicalDeviceQueueFamilyProperties;
+	PFN_vkGetPhysicalDeviceSparseImageFormatProperties vkGetPhysicalDeviceSparseImageFormatProperties;
 } vulkan_instance_pfn;
 
 struct VkInstance_T {
