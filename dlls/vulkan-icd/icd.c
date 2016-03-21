@@ -84,6 +84,7 @@ static void load_device_pfn(
 {
 	#define GET(f) pfn->f = (PFN_##f)get(device, #f);
 
+	GET(vkCmdExecuteCommands);
 	GET(vkDestroyDevice);
 	GET(vkGetDeviceQueue);
 
@@ -587,6 +588,35 @@ void WINAPI vkDestroyDevice(
 	allocator_free(allocatorp, device);
 }
 
+void WINAPI vkCmdExecuteCommands(
+	VkCommandBuffer        commandBuffer,
+	uint32_t               commandBufferCount,
+	const VkCommandBuffer *pCommandBuffers)
+{
+	#define COMMAND_BUFFER_BATCH_SIZE 16
+
+	TRACE("(%p, %u, %p)\n", commandBuffer, commandBufferCount, pCommandBuffers);
+
+	while (commandBufferCount >= COMMAND_BUFFER_BATCH_SIZE)
+	{
+		uint32_t i;
+		VkCommandBuffer commandBuffers[COMMAND_BUFFER_BATCH_SIZE];
+
+		for (i = 0; i < min(COMMAND_BUFFER_BATCH_SIZE, commandBufferCount); ++i)
+		{
+			commandBuffers[i] = pCommandBuffers[i]->commandBuffer;
+		}
+
+		commandBuffer->device->pfn.vkCmdExecuteCommands(
+			commandBuffer->commandBuffer,
+			min(COMMAND_BUFFER_BATCH_SIZE, commandBufferCount),
+			commandBuffers);
+
+		commandBufferCount -= COMMAND_BUFFER_BATCH_SIZE;
+		pCommandBuffers += COMMAND_BUFFER_BATCH_SIZE;
+	}
+}
+
 void WINAPI vkGetDeviceQueue(
 	VkDevice  device,
 	uint32_t  queueFamilyIndex,
@@ -619,6 +649,7 @@ static const size_t vulkan_instance_function_count =
 	sizeof(vulkan_instance_functions) / sizeof(vulkan_instance_functions[0]);
 
 static vulkan_function vulkan_device_functions[] = {
+	{ "vkCmdExecuteCommands", vkCmdExecuteCommands },
 	{ "vkDestroyDevice", vkDestroyDevice },
 	{ "vkGetDeviceProcAddr", vkGetDeviceProcAddr },
 	{ "vkGetDeviceQueue", vkGetDeviceQueue },

@@ -29,6 +29,7 @@ typedef struct {
 } vulkan_instance_pfn;
 
 typedef struct {
+	PFN_vkCmdExecuteCommands vkCmdExecuteCommands;
 	PFN_vkDestroyDevice vkDestroyDevice;
 	PFN_vkGetDeviceQueue vkGetDeviceQueue;
 } vulkan_device_pfn;
