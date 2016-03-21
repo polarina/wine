@@ -57,6 +57,36 @@ typedef void (WINAPI *WPFN_vkInternalFreeNotification)(
 	VkInternalAllocationType  allocationType,
 	VkSystemAllocationScope   allocationScope);
 
+struct allocator_store_entry {
+	struct wine_rb_entry entry;
+	uint64_t handle;
+	struct allocator *pAllocator;
+	struct allocator allocator;
+	uint32_t referenceCount;
+};
+
+static int rbtree_compare(const void *key, const struct wine_rb_entry *entry)
+{
+	uint64_t handle = *(uint64_t *)key;
+	const struct allocator_store_entry *allocator =
+		(const struct allocator_store_entry *)entry;
+
+	if (handle == allocator->handle)
+		return 0;
+
+	if (handle < allocator->handle)
+		return -1;
+
+	return 1;
+}
+
+static const struct wine_rb_functions rbtree_functions = {
+	NULL,
+	NULL,
+	NULL,
+	&rbtree_compare
+};
+
 static void *allocator_callback_vkAllocationFunction(
 	void                    *pUserData,
 	size_t                   size,
@@ -244,5 +274,64 @@ void allocator_free(
 			(WPFN_vkFreeFunction)allocator->pfnFree;
 
 		vkFreeFunction(allocator->pUserData, pMemory);
+	}
+}
+
+void allocator_store_initialize(
+	struct allocator_store  *allocatorStore)
+{
+	wine_rb_init(&allocatorStore->tree, &rbtree_functions);
+}
+
+bool allocator_store_add(
+	struct allocator_store  *allocatorStore,
+	uint64_t                 handle,
+	struct allocator        *allocator,
+	VkSystemAllocationScope  scope)
+{
+	struct wine_rb_entry *entry = wine_rb_get(&allocatorStore->tree, &handle);
+	struct allocator_store_entry *store;
+
+	if (entry == NULL)
+	{
+		store = allocator_allocate(
+			allocator,
+			sizeof(*store),
+			8, /* alignof(*store) */
+			scope);
+
+		if (store == NULL)
+			return false;
+
+		store->handle = handle;
+		store->pAllocator = allocator;
+		store->referenceCount = 1;
+
+		if (allocator != NULL)
+		{
+			store->allocator = *allocator;
+		}
+
+		wine_rb_put(&allocatorStore->tree, &handle, (struct wine_rb_entry *)store);
+	}
+	else
+	{
+		store = (struct allocator_store_entry *)entry;
+		++store->referenceCount;
+	}
+
+	return true;
+}
+
+void allocator_store_remove(
+	struct allocator_store *allocatorStore,
+	uint64_t                handle)
+{
+	struct wine_rb_entry *entry = wine_rb_get(&allocatorStore->tree, &handle);
+	struct allocator_store_entry *store = (struct allocator_store_entry *)entry;
+
+	if (--store->referenceCount == 0)
+	{
+		allocator_free(store->pAllocator, store);
 	}
 }
