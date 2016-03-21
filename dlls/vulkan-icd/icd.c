@@ -678,6 +678,27 @@ void WINAPI vkDestroyDescriptorPool(
 	return device->pfn.vkDestroyDescriptorPool(device->device, descriptorPool, NULL);
 }
 
+VkResult WINAPI vkCreatePipelineCache(
+	VkDevice                         device,
+	const VkPipelineCacheCreateInfo *pCreateInfo,
+	const VkAllocationCallbacks     *pAllocator,
+	VkPipelineCache                 *pPipelineCache)
+{
+	TRACE("(%p, %p, %p, %p)\n", device, pCreateInfo, pAllocator, pPipelineCache);
+
+	return device->pfn.vkCreatePipelineCache(device->device, pCreateInfo, NULL, pPipelineCache);
+}
+
+void WINAPI vkDestroyPipelineCache(
+	VkDevice                     device,
+	VkPipelineCache              pipelineCache,
+	const VkAllocationCallbacks *pAllocator)
+{
+	TRACE("(%p, "DBGDYNF", %p)\n", device, DBGDYNV(pipelineCache), pAllocator);
+
+	return device->pfn.vkDestroyPipelineCache(device->device, pipelineCache, NULL);
+}
+
 VkResult WINAPI vkAllocateCommandBuffers(
 	VkDevice                           device,
 	const VkCommandBufferAllocateInfo *pAllocateInfo,
