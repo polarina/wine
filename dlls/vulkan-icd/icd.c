@@ -657,6 +657,27 @@ void WINAPI vkDestroyCommandPool(
 		allocator_callbacks(allocatorp, &callbacks));
 }
 
+VkResult WINAPI vkCreateDescriptorPool(
+	VkDevice                          device,
+	const VkDescriptorPoolCreateInfo *pCreateInfo,
+	const VkAllocationCallbacks      *pAllocator,
+	VkDescriptorPool                 *pDescriptorPool)
+{
+	TRACE("(%p, %p, %p, %p)\n", device, pCreateInfo, pAllocator, pDescriptorPool);
+
+	return device->pfn.vkCreateDescriptorPool(device->device, pCreateInfo, NULL, pDescriptorPool);
+}
+
+void WINAPI vkDestroyDescriptorPool(
+	VkDevice                     device,
+	VkDescriptorPool             descriptorPool,
+	const VkAllocationCallbacks *pAllocator)
+{
+	TRACE("(%p, "DBGDYNF", %p)\n", device, DBGDYNV(descriptorPool), pAllocator);
+
+	return device->pfn.vkDestroyDescriptorPool(device->device, descriptorPool, NULL);
+}
+
 VkResult WINAPI vkAllocateCommandBuffers(
 	VkDevice                           device,
 	const VkCommandBufferAllocateInfo *pAllocateInfo,
