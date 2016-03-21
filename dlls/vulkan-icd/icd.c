@@ -62,8 +62,10 @@ static void load_instance_pfn(
 {
 	#define GET(f) pfn->f = (PFN_##f)get(instance, #f)
 
+	GET(vkCreateDevice);
 	GET(vkDestroyInstance);
 	GET(vkEnumeratePhysicalDevices);
+	GET(vkGetDeviceProcAddr);
 	GET(vkGetPhysicalDeviceFeatures);
 	GET(vkGetPhysicalDeviceFormatProperties);
 	GET(vkGetPhysicalDeviceImageFormatProperties);
@@ -71,6 +73,18 @@ static void load_instance_pfn(
 	GET(vkGetPhysicalDeviceProperties);
 	GET(vkGetPhysicalDeviceQueueFamilyProperties);
 	GET(vkGetPhysicalDeviceSparseImageFormatProperties);
+
+	#undef GET
+}
+
+static void load_device_pfn(
+	VkDevice                 device,
+	PFN_vkGetDeviceProcAddr  get,
+	vulkan_device_pfn       *pfn)
+{
+	#define GET(f) pfn->f = (PFN_##f)get(device, #f);
+
+	GET(vkDestroyDevice);
 
 	#undef GET
 }
@@ -399,7 +413,84 @@ void WINAPI vkGetPhysicalDeviceSparseImageFormatProperties(
 		pProperties);
 }
 
+VkResult WINAPI vkCreateDevice(
+	VkPhysicalDevice             physicalDevice,
+	const VkDeviceCreateInfo    *pCreateInfo,
+	const VkAllocationCallbacks *pAllocator,
+	VkDevice                    *pDevice)
+{
+	VkDevice device;
+	VkResult result;
+	struct allocator allocator;
+	VkAllocationCallbacks callbacks;
+
+	TRACE("(%p, %p, %p, %p)\n", physicalDevice, pCreateInfo, pAllocator, pDevice);
+
+	if (pCreateInfo->enabledLayerCount > 0)
+		return VK_ERROR_LAYER_NOT_PRESENT;
+
+	if (pCreateInfo->enabledExtensionCount > 0)
+		return VK_ERROR_EXTENSION_NOT_PRESENT;
+
+	device = allocator_allocate(
+		allocator_initialize(pAllocator, physicalDevice->instance->pAllocator, &allocator),
+		sizeof(*device),
+		8, /* alignof(*device) */
+		VK_SYSTEM_ALLOCATION_SCOPE_DEVICE);
+
+	if (device == NULL)
+		return VK_ERROR_OUT_OF_HOST_MEMORY;
+
+	set_loader_magic_value(&device->loader_data);
+	device->instance = physicalDevice->instance;
+	device->pAllocator = allocator_initialize(
+		pAllocator, physicalDevice->instance->pAllocator, &device->allocator);
+
+	result = physicalDevice->instance->pfn.vkCreateDevice(
+		physicalDevice->physicalDevice,
+		pCreateInfo,
+		allocator_callbacks(device->pAllocator, &callbacks),
+		&device->device);
+
+	if (result != VK_SUCCESS)
+	{
+		allocator_free(device->pAllocator, device);
+
+		return result;
+	}
+
+	load_device_pfn(
+		device->device,
+		(PFN_vkGetDeviceProcAddr)device->instance->pfn.vkGetDeviceProcAddr(
+			device->device, "vkGetDeviceProcAddr"),
+		&device->pfn);
+
+	*pDevice = device;
+
+	return VK_SUCCESS;
+}
+
+void WINAPI vkDestroyDevice(
+	VkDevice                     device,
+	const VkAllocationCallbacks *pAllocator)
+{
+	struct allocator *allocatorp;
+	struct allocator allocator;
+	VkAllocationCallbacks callbacks;
+
+	TRACE("(%p, %p)\n", device, pAllocator);
+
+	allocatorp = allocator_initialize(pAllocator, device->pAllocator, &allocator);
+
+	device->pfn.vkDestroyDevice(
+		device->device,
+		allocator_callbacks(allocatorp, &callbacks));
+
+	allocator_free(allocatorp, device);
+}
+
 static const vulkan_function vulkan_instance_functions[] = {
+	{ "vkCreateDevice", vkCreateDevice },
 	{ "vkCreateInstance", vkCreateInstance },
 	{ "vkDestroyInstance", vkDestroyInstance },
 	{ "vkEnumerateInstanceExtensionProperties", vkEnumerateInstanceExtensionProperties },
@@ -418,6 +509,7 @@ static const size_t vulkan_instance_function_count =
 	sizeof(vulkan_instance_functions) / sizeof(vulkan_instance_functions[0]);
 
 static vulkan_function vulkan_device_functions[] = {
+	{ "vkDestroyDevice", vkDestroyDevice },
 	{ "vkGetDeviceProcAddr", vkGetDeviceProcAddr },
 };
 

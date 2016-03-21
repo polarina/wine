@@ -15,8 +15,10 @@ typedef struct {
 } vulkan_global_pfn;
 
 typedef struct {
+	PFN_vkCreateDevice vkCreateDevice;
 	PFN_vkDestroyInstance vkDestroyInstance;
 	PFN_vkEnumeratePhysicalDevices vkEnumeratePhysicalDevices;
+	PFN_vkGetDeviceProcAddr vkGetDeviceProcAddr;
 	PFN_vkGetPhysicalDeviceFeatures vkGetPhysicalDeviceFeatures;
 	PFN_vkGetPhysicalDeviceFormatProperties vkGetPhysicalDeviceFormatProperties;
 	PFN_vkGetPhysicalDeviceImageFormatProperties vkGetPhysicalDeviceImageFormatProperties;
@@ -25,6 +27,21 @@ typedef struct {
 	PFN_vkGetPhysicalDeviceQueueFamilyProperties vkGetPhysicalDeviceQueueFamilyProperties;
 	PFN_vkGetPhysicalDeviceSparseImageFormatProperties vkGetPhysicalDeviceSparseImageFormatProperties;
 } vulkan_instance_pfn;
+
+typedef struct {
+	PFN_vkDestroyDevice vkDestroyDevice;
+} vulkan_device_pfn;
+
+struct VkDevice_T {
+	VK_LOADER_DATA loader_data;
+	VkInstance instance;
+	VkDevice device;
+
+	struct allocator *pAllocator;
+	struct allocator allocator;
+
+	vulkan_device_pfn pfn;
+};
 
 struct VkInstance_T {
 	VK_LOADER_DATA loader_data;
