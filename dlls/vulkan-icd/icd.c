@@ -159,9 +159,22 @@ void WINAPI vkDestroyInstance(
 	allocator_free(allocatorp, instance);
 }
 
+VkResult WINAPI vkEnumerateInstanceExtensionProperties(
+	const char              *pLayerName,
+	uint32_t                *pPropertyCount,
+	VkExtensionProperties   *pProperties)
+{
+	TRACE("(%s, %p, %p)\n", pLayerName, pPropertyCount, pProperties);
+
+	*pPropertyCount = 0;
+
+	return VK_SUCCESS;
+}
+
 static const vulkan_function vulkan_instance_functions[] = {
 	{ "vkCreateInstance", vkCreateInstance },
 	{ "vkDestroyInstance", vkDestroyInstance },
+	{ "vkEnumerateInstanceExtensionProperties", vkEnumerateInstanceExtensionProperties },
 };
 
 static const size_t vulkan_instance_function_count =
