@@ -61,6 +61,7 @@ static void load_instance_pfn(
 
 	GET(vkDestroyInstance);
 	GET(vkEnumeratePhysicalDevices);
+	GET(vkGetPhysicalDeviceFeatures);
 	GET(vkGetPhysicalDeviceProperties);
 
 	#undef GET
@@ -265,6 +266,17 @@ VkResult WINAPI vkEnumeratePhysicalDevices(
 	return VK_SUCCESS;
 }
 
+void WINAPI vkGetPhysicalDeviceFeatures(
+	VkPhysicalDevice          physicalDevice,
+	VkPhysicalDeviceFeatures *pFeatures)
+{
+	TRACE("(%p, %p)\n", physicalDevice, pFeatures);
+
+	physicalDevice->instance->pfn.vkGetPhysicalDeviceFeatures(
+		physicalDevice->physicalDevice,
+		pFeatures);
+}
+
 void WINAPI vkGetPhysicalDeviceProperties(
 	VkPhysicalDevice            physicalDevice,
 	VkPhysicalDeviceProperties *pProperties)
@@ -281,6 +293,7 @@ static const vulkan_function vulkan_instance_functions[] = {
 	{ "vkDestroyInstance", vkDestroyInstance },
 	{ "vkEnumerateInstanceExtensionProperties", vkEnumerateInstanceExtensionProperties },
 	{ "vkEnumeratePhysicalDevices", vkEnumeratePhysicalDevices },
+	{ "vkGetPhysicalDeviceFeatures", vkGetPhysicalDeviceFeatures },
 	{ "vkGetPhysicalDeviceProperties", vkGetPhysicalDeviceProperties },
 };
 
