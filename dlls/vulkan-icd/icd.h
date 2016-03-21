@@ -17,6 +17,7 @@ typedef struct {
 typedef struct {
 	PFN_vkDestroyInstance vkDestroyInstance;
 	PFN_vkEnumeratePhysicalDevices vkEnumeratePhysicalDevices;
+	PFN_vkGetPhysicalDeviceProperties vkGetPhysicalDeviceProperties;
 } vulkan_instance_pfn;
 
 struct VkInstance_T {
