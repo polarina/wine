@@ -85,6 +85,7 @@ static void load_device_pfn(
 	#define GET(f) pfn->f = (PFN_##f)get(device, #f);
 
 	GET(vkDestroyDevice);
+	GET(vkGetDeviceQueue);
 
 	#undef GET
 }
@@ -436,6 +437,10 @@ VkResult WINAPI vkCreateDevice(
 	VkResult result;
 	struct allocator allocator;
 	VkAllocationCallbacks callbacks;
+	uint32_t maxQueueFamilyIndex = 0;
+	uint32_t queueCount = 0;
+	uint32_t i;
+	uint32_t j;
 
 	TRACE("(%p, %p, %p, %p)\n", physicalDevice, pCreateInfo, pAllocator, pDevice);
 
@@ -444,6 +449,15 @@ VkResult WINAPI vkCreateDevice(
 
 	if (pCreateInfo->enabledExtensionCount > 0)
 		return VK_ERROR_EXTENSION_NOT_PRESENT;
+
+	for (i = 0; i < pCreateInfo->queueCreateInfoCount; ++i)
+	{
+		maxQueueFamilyIndex = max(
+			maxQueueFamilyIndex,
+			pCreateInfo->pQueueCreateInfos[i].queueFamilyIndex);
+
+		queueCount += pCreateInfo->pQueueCreateInfos[i].queueCount;
+	}
 
 	device = allocator_allocate(
 		allocator_initialize(pAllocator, physicalDevice->instance->pAllocator, &allocator),
@@ -459,6 +473,46 @@ VkResult WINAPI vkCreateDevice(
 	device->pAllocator = allocator_initialize(
 		pAllocator, physicalDevice->instance->pAllocator, &device->allocator);
 
+	device->queueFamilyCount = maxQueueFamilyIndex + 1;
+	device->queueFamilies = allocator_allocate(
+		device->pAllocator,
+		sizeof(*device->queueFamilies) * device->queueFamilyCount,
+		8, /* alignof(*device->queueFamilies) */
+		VK_SYSTEM_ALLOCATION_SCOPE_DEVICE);
+
+	if (device->queueFamilies == NULL)
+	{
+		allocator_free(device->pAllocator, device);
+
+		return VK_ERROR_OUT_OF_HOST_MEMORY;
+	}
+
+	memset(device->queueFamilies, 0, sizeof(*device->queueFamilies) * maxQueueFamilyIndex);
+
+	for (i = 0; i < pCreateInfo->queueCreateInfoCount; ++i)
+	{
+		VkDeviceQueueCreateInfo createInfo = pCreateInfo->pQueueCreateInfos[i];
+		VkQueue *queues = &device->queueFamilies[createInfo.queueFamilyIndex];
+
+		*queues = allocator_allocate(
+			device->pAllocator,
+			sizeof(**queues) * createInfo.queueCount,
+			8, /* alignof(*queues) */
+			VK_SYSTEM_ALLOCATION_SCOPE_DEVICE);
+
+		if (*queues == NULL)
+		{
+			for (i = 0; i < device->queueFamilyCount; ++i)
+			{
+				allocator_free(device->pAllocator, device->queueFamilies[i]);
+			}
+
+			allocator_free(device->pAllocator, device);
+
+			return VK_ERROR_OUT_OF_HOST_MEMORY;
+		}
+	}
+
 	result = physicalDevice->instance->pfn.vkCreateDevice(
 		physicalDevice->physicalDevice,
 		pCreateInfo,
@@ -467,6 +521,12 @@ VkResult WINAPI vkCreateDevice(
 
 	if (result != VK_SUCCESS)
 	{
+		for (i = 0; i < device->queueFamilyCount; ++i)
+		{
+			allocator_free(device->pAllocator, device->queueFamilies[i]);
+		}
+
+		allocator_free(device->pAllocator, device->queueFamilies);
 		allocator_free(device->pAllocator, device);
 
 		return result;
@@ -477,6 +537,24 @@ VkResult WINAPI vkCreateDevice(
 		(PFN_vkGetDeviceProcAddr)device->instance->pfn.vkGetDeviceProcAddr(
 			device->device, "vkGetDeviceProcAddr"),
 		&device->pfn);
+
+	for (i = 0; i < pCreateInfo->queueCreateInfoCount; ++i)
+	{
+		VkDeviceQueueCreateInfo createInfo = pCreateInfo->pQueueCreateInfos[i];
+		VkQueue queues = device->queueFamilies[createInfo.queueFamilyIndex];
+
+		for (j = 0; j < createInfo.queueCount; ++j)
+		{
+			set_loader_magic_value(&queues[j].loader_data);
+			queues[j].device = device;
+
+			device->pfn.vkGetDeviceQueue(
+				device->device,
+				createInfo.queueFamilyIndex,
+				j,
+				&queues[j].queue);
+		}
+	}
 
 	*pDevice = device;
 
@@ -490,16 +568,34 @@ void WINAPI vkDestroyDevice(
 	struct allocator *allocatorp;
 	struct allocator allocator;
 	VkAllocationCallbacks callbacks;
+	uint32_t i;
 
 	TRACE("(%p, %p)\n", device, pAllocator);
 
 	allocatorp = allocator_initialize(pAllocator, device->pAllocator, &allocator);
 
+	for (i = 0; i < device->queueFamilyCount; ++i)
+	{
+		allocator_free(allocatorp, device->queueFamilies[i]);
+	}
+
 	device->pfn.vkDestroyDevice(
 		device->device,
 		allocator_callbacks(allocatorp, &callbacks));
 
+	allocator_free(allocatorp, device->queueFamilies);
 	allocator_free(allocatorp, device);
+}
+
+void WINAPI vkGetDeviceQueue(
+	VkDevice  device,
+	uint32_t  queueFamilyIndex,
+	uint32_t  queueIndex,
+	VkQueue  *pQueue)
+{
+	TRACE("(%p, %u, %u, %p)\n", device, queueFamilyIndex, queueIndex, pQueue);
+
+	*pQueue = &device->queueFamilies[queueFamilyIndex][queueIndex];
 }
 
 static const vulkan_function vulkan_instance_functions[] = {
@@ -525,6 +621,7 @@ static const size_t vulkan_instance_function_count =
 static vulkan_function vulkan_device_functions[] = {
 	{ "vkDestroyDevice", vkDestroyDevice },
 	{ "vkGetDeviceProcAddr", vkGetDeviceProcAddr },
+	{ "vkGetDeviceQueue", vkGetDeviceQueue },
 };
 
 static size_t vulkan_device_function_count =

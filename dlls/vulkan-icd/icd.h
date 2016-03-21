@@ -30,6 +30,7 @@ typedef struct {
 
 typedef struct {
 	PFN_vkDestroyDevice vkDestroyDevice;
+	PFN_vkGetDeviceQueue vkGetDeviceQueue;
 } vulkan_device_pfn;
 
 struct VkDevice_T {
@@ -39,6 +40,9 @@ struct VkDevice_T {
 
 	struct allocator *pAllocator;
 	struct allocator allocator;
+
+	uint32_t queueFamilyCount;
+	VkQueue *queueFamilies;
 
 	vulkan_device_pfn pfn;
 };
@@ -62,6 +66,12 @@ struct VkPhysicalDevice_T {
 	VK_LOADER_DATA loader_data;
 	VkInstance instance;
 	VkPhysicalDevice physicalDevice;
+};
+
+struct VkQueue_T {
+	VK_LOADER_DATA loader_data;
+	VkDevice device;
+	VkQueue queue;
 };
 
 typedef struct {
