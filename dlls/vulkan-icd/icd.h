@@ -9,14 +9,7 @@
 #include "vulkan.h"
 
 #include "allocator.h"
-
-#if defined(__LP64__) || defined(_WIN64) || defined(__x86_64__) || defined(_M_X64) || defined(__ia64) || defined (_M_IA64) || defined(__aarch64__) || defined(__powerpc64__)
-	#define DBGDYNF "%p"
-	#define DBGDYNV(x) x
-#else
-	#define DBGDYNF "0x%04x%04x"
-	#define DBGDYNV(x) x >> 32, x & 0xffffffff
-#endif
+#include "icd_autogen.h"
 
 typedef struct {
 	PFN_vkCreateInstance vkCreateInstance;
@@ -35,17 +28,6 @@ typedef struct {
 	PFN_vkGetPhysicalDeviceQueueFamilyProperties vkGetPhysicalDeviceQueueFamilyProperties;
 	PFN_vkGetPhysicalDeviceSparseImageFormatProperties vkGetPhysicalDeviceSparseImageFormatProperties;
 } vulkan_instance_pfn;
-
-typedef struct {
-	PFN_vkAllocateCommandBuffers vkAllocateCommandBuffers;
-	PFN_vkCmdExecuteCommands vkCmdExecuteCommands;
-	PFN_vkCreateCommandPool vkCreateCommandPool;
-	PFN_vkDestroyCommandPool vkDestroyCommandPool;
-	PFN_vkDestroyDevice vkDestroyDevice;
-	PFN_vkFreeCommandBuffers vkFreeCommandBuffers;
-	PFN_vkGetDeviceQueue vkGetDeviceQueue;
-	PFN_vkQueueSubmit vkQueueSubmit;
-} vulkan_device_pfn;
 
 struct VkCommandBuffer_T {
 	VK_LOADER_DATA loader_data;
@@ -100,5 +82,13 @@ typedef struct {
 	const char *pName;
 	void *pfn;
 } vulkan_function;
+
+extern const vulkan_function vulkan_device_functions[];
+extern const size_t vulkan_device_function_count;
+
+void load_device_pfn(
+	VkDevice                 device,
+	PFN_vkGetDeviceProcAddr  get,
+	vulkan_device_pfn       *pfn);
 
 #endif

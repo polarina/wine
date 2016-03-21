@@ -17,6 +17,365 @@
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
 
 use strict;
+use XML::Simple;
 
+-f "vk.xml" || system "wget https://raw.githubusercontent.com/KhronosGroup/Vulkan-Docs/1.0/src/spec/vk.xml" || die "cannot download vk.xml";
 -f "vulkan.h" || system "wget https://raw.githubusercontent.com/KhronosGroup/Vulkan-Docs/1.0/src/vulkan/vulkan.h" || die "cannot download vulkan.h";
 -f "vk_icd.h" || system "wget https://raw.githubusercontent.com/KhronosGroup/Vulkan-LoaderAndValidationLayers/master/include/vulkan/vk_icd.h" || die "cannot download vk_icd.h";
+
+my %supported_extensions = (
+	"VK_VERSION_1_0" => 1,
+);
+
+sub parse_variable($)
+{
+	my $p = shift;
+	my $type = '';
+	my $name = '';
+	my $typebefore = '';
+	my $typeafter = '';
+
+	while (my ($k, $v) = each(%$p)) {
+		if ($k eq 'type') {
+			$type = ${$v}[0];
+		} elsif ($k eq 'name') {
+			$name = ${$v}[0];
+		} elsif ($k eq 'content') {
+			if (ref($v) eq 'ARRAY') {
+				my @n = @{$v};
+				$typebefore = $n[0];
+				$typeafter = $n[1] if (@n > 0);
+			} elsif ($v eq 'const ') {
+				$typebefore = $v;
+			} else {
+				$typeafter = $v;
+			}
+		}
+	}
+
+	$type = $typebefore . $type . $typeafter;
+	$type =~ s/ \*/\*/g;
+	$type =~ s/ $//g;
+
+	return [ $type, $name ];
+}
+
+my %commands = ( );
+my %required_commands = ( );
+
+sub parse_registry($)
+{
+	my $file = shift;
+	my $xml = new XML::Simple;
+	my $data = $xml->XMLin($file, ForceArray => 1);
+
+	for my $command ( @{${$data->{commands}}[0]->{'command'}} ) {
+		my $name = '';
+		my $ret = '';
+		my $params = [];
+
+		while (my ($k, $v) = each(%$command)) {
+			if ($k eq 'param') {
+				push(@$params, parse_variable($_)) for (@{$v});
+			} elsif ($k eq 'proto') {
+				($ret, $name) = @{parse_variable(${$v}[0])};
+			}
+		}
+
+		$commands{$name} = [ $ret, $params ];
+	}
+
+	while (my ($k, $v) = each(%{$data->{feature}})) {
+		if (defined $supported_extensions{$k}) {
+			for my $req (@{$v->{require}}) {
+				for (keys %{$req->{command}}) {
+					$required_commands{$_} = $commands{$_};
+				}
+			}
+		}
+	}
+
+	while (my ($k, $v) = each(%{${$data->{extensions}}[0]->{'extension'}})) {
+		print $k . "\n";
+
+		if (defined $supported_extensions{$k}) {
+			for my $req (@{$v->{require}}) {
+				for (keys %{$req->{command}}) {
+					$required_commands{$_} = $commands{$_};
+				}
+			}
+		}
+	}
+}
+
+my %debug_conv = (
+	# handles
+	"VkCommandBuffer" => "%p",
+	"VkDevice" => "%p",
+	"VkQueue" => "%p",
+
+	# enums
+	"VkFilter" => "%u",
+	"VkImageLayout" => "%u",
+	"VkIndexType" => "%u",
+	"VkPipelineBindPoint" => "%u",
+	"VkSubpassContents" => "%u",
+
+	# flags
+	"VkCommandBufferResetFlags" => "0x%04x",
+	"VkCommandPoolResetFlags" => "0x%04x",
+	"VkDependencyFlags" => "0x%04x",
+	"VkDescriptorPoolResetFlags" => "0x%04x",
+	"VkMemoryMapFlags" => "0x%04x",
+	"VkPipelineStageFlags" => "0x%04x",
+	"VkQueryControlFlags" => "0x%04x",
+	"VkQueryResultFlags" => "0x%04x",
+	"VkShaderStageFlags" => "0x%04x",
+	"VkStencilFaceFlags" => "0x%04x",
+
+	# bit fields
+	"VkPipelineStageFlagBits" => "0x%04x",
+
+	# miscellaneous
+	"VkBool32" => "%d",
+	"VkDeviceSize" => "%s,wine_dbgstr_longlong(%s)",
+
+	"float" => "%f",
+	"int32_t" => "%d",
+	"uint32_t" => "%u",
+	"uint64_t" => "%s,wine_dbgstr_longlong(%s)",
+	"size_t" => "%lu",
+
+	"const float[4]" => "%p",
+);
+
+my %debug_conv_dyn = (
+	"VkBuffer" => 1,
+	"VkBufferView" => 1,
+	"VkCommandPool" => 1,
+	"VkDescriptorPool" => 1,
+	"VkDescriptorSetLayout" => 1,
+	"VkDeviceMemory" => 1,
+	"VkEvent" => 1,
+	"VkFence" => 1,
+	"VkFramebuffer" => 1,
+	"VkImage" => 1,
+	"VkImageView" => 1,
+	"VkPipeline" => 1,
+	"VkPipelineCache" => 1,
+	"VkPipelineLayout" => 1,
+	"VkQueryPool" => 1,
+	"VkRenderPass" => 1,
+	"VkSampler" => 1,
+	"VkSemaphore" => 1,
+	"VkShaderModule" => 1,
+);
+
+sub generate_trace($)
+{
+	my $func_ref = shift;
+	my $format = '';
+	my $params = '';
+
+	for (my $i = 0; $i < @{$func_ref}; $i++) {
+		my $type = $func_ref->[$i]->[0];
+		my $name = $func_ref->[$i]->[1];
+
+		if ($i != 0) {
+			$format .= ", ";
+			$params .= ", ";
+		}
+
+		if ($name =~ /p[A-Z]\w*/) {
+			$format .= "%p";
+		} elsif (defined $debug_conv{$type}) {
+			if ($debug_conv{$type} =~ /(.*),(.*)/) {
+				$format .= $1;
+				$name = sprintf $2, $name;
+			} else {
+				$format .= $debug_conv{$type}
+			}
+		} elsif (defined $debug_conv_dyn{$type}) {
+			$format .= "\"DBGDYNF\"";
+			$name = "DBGDYNV($name)";
+		} else {
+			die "unknown type $type";
+		}
+
+		$params .= $name;
+	}
+
+	return "FIXME(\"($format): stub\\n\", $params);";
+}
+
+sub generate_thunk_header($$)
+{
+	my ($name, $func_ref) = @_;
+	my $code = $func_ref->[0] . " WINAPI " . $name . "(\n";
+
+	my $longest_type = 0;
+
+	for (my $i = 0; $i < @{$func_ref->[1]}; $i++) {
+		my $type = $func_ref->[1]->[$i]->[0];
+
+		if (length $type > $longest_type) {
+			$longest_type = length $type;
+		}
+	}
+
+	for (my $i = 0; $i < @{$func_ref->[1]}; $i++) {
+		my $type = $func_ref->[1]->[$i]->[0];
+		my $name = $func_ref->[1]->[$i]->[1];
+
+		if ($type =~ /(.+)\[(\d+)\]/) {
+			$type = $1;
+			$name .= "[$2]";
+		}
+
+		$code .= "\t" . $type . " " . " "x($longest_type - length $type) . $name;
+
+		if ($i == @{$func_ref->[1]} - 1) {
+			$code .= ")";
+		} else {
+			$code .= ",\n";
+		}
+	}
+
+	return $code;
+}
+
+sub generate_thunk($$)
+{
+	my ($name, $func_ref) = @_;
+	my $code = generate_thunk_header($name, $func_ref) . "\n";
+
+	$code .= "{\n";
+	$code .= "\t" . generate_trace($func_ref->[1]) . "\n";
+
+	if ($func_ref->[0] ne 'void') {
+		$code .= "\treturn VK_SUCCESS;\n";
+	}
+
+	$code .= "}\n";
+
+	return $code;
+}
+
+parse_registry("vk.xml");
+
+my %types = (
+	"VkCommandBuffer" => 1,
+	"VkDevice" => 1,
+	"VkQueue" => 1,
+);
+
+my %skip_commands = (
+	"vkAllocateCommandBuffers" => 1,
+	"vkCmdExecuteCommands" => 1,
+	"vkCreateCommandPool" => 1,
+	"vkCreateDescriptorPool" => 1,
+	"vkCreatePipelineCache" => 1,
+	"vkDestroyCommandPool" => 1,
+	"vkDestroyDevice" => 1,
+	"vkDestroyDescriptorPool" => 1,
+	"vkDestroyPipelineCache" => 1,
+	"vkFreeCommandBuffers" => 1,
+	"vkGetDeviceProcAddr" => 1,
+	"vkGetDeviceQueue" => 1,
+	"vkQueueSubmit" => 1,
+);
+
+open HEADER, ">icd_autogen.h" or die "cannot create icd_autogen.h";
+
+print HEADER "/* Automatically generated file. DO NOT EDIT! */
+
+#ifndef __DLLS_VULKAN_ICD_ICD_AUTOGEN_H
+#define __DLLS_VULKAN_ICD_ICD_AUTOGEN_H
+
+#define VK_NO_PROTOTYPES
+#include \"vulkan.h\"
+
+#if defined(__LP64__) || defined(_WIN64) || defined(__x86_64__) || defined(_M_X64) || defined(__ia64) || defined (_M_IA64) || defined(__aarch64__) || defined(__powerpc64__)
+	#define DBGDYNF \"%p\"
+	#define DBGDYNV(x) x
+#else
+	#define DBGDYNF \"0x%04x%04x\"
+	#define DBGDYNV(x) x >> 32, x & 0xffffffff
+#endif
+
+typedef struct {
+";
+
+foreach (sort keys %required_commands) {
+	if (defined $types{$required_commands{$_}->[1]->[0]->[0]}) {
+		print HEADER "\tPFN_$_ $_;\n";
+	}
+}
+
+print HEADER "} vulkan_device_pfn;
+
+#endif
+";
+
+close HEADER;
+
+open SOURCE, ">icd_autogen.c" or die "cannot create icd_autogen.c";
+
+print SOURCE "/* Automatically generated file. DO NOT EDIT! */
+
+#include <stdbool.h>
+#include \"windef.h\"
+#include \"wine/debug.h\"
+
+#include \"icd.h\"
+
+WINE_DEFAULT_DEBUG_CHANNEL(vulkan_icd);
+";
+
+foreach (sort keys %required_commands) {
+	if (defined $types{$required_commands{$_}->[1]->[0]->[0]}) {
+		if (defined $skip_commands{$_}) {
+			print SOURCE "\n" . generate_thunk_header($_, $required_commands{$_}) . ";\n";
+		} else {
+			print SOURCE "\n" . generate_thunk($_, $required_commands{$_});
+		}
+	}
+}
+
+print SOURCE "
+void load_device_pfn(
+	VkDevice                 device,
+	PFN_vkGetDeviceProcAddr  get,
+	vulkan_device_pfn       *pfn)
+{
+	#define GET(f) pfn->f = (PFN_##f)get(device, #f);
+
+";
+
+foreach (sort keys %required_commands) {
+	if (defined $types{$required_commands{$_}->[1]->[0]->[0]}) {
+		print SOURCE "\tGET($_);\n";
+	}
+}
+
+print SOURCE "
+	#undef GET
+}
+";
+
+print SOURCE "
+const vulkan_function vulkan_device_functions[] = {\n";
+
+foreach (sort keys %required_commands) {
+	if (defined $types{$required_commands{$_}->[1]->[0]->[0]}) {
+		print SOURCE "\t{ \"$_\", $_ },\n";
+	}
+}
+
+print SOURCE "};
+
+const size_t vulkan_device_function_count =
+	sizeof(vulkan_device_functions) / sizeof(vulkan_device_functions[0]);
+";
+
+close SOURCE;

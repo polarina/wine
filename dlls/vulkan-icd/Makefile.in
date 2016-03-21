@@ -3,4 +3,5 @@ IMPORTLIB = vulkan-icd
 
 C_SRCS = \
 	allocator.c \
-	icd.c
+	icd.c \
+	icd_autogen.c

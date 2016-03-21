@@ -32,9 +32,6 @@
 
 #define SONAME_LIBVULKAN "libvulkan.so.1"
 
-static vulkan_function vulkan_device_functions[];
-static size_t vulkan_device_function_count;
-
 WINE_DEFAULT_DEBUG_CHANNEL(vulkan_icd);
 
 static int compar(const void *elt_a, const void *elt_b)
@@ -73,25 +70,6 @@ static void load_instance_pfn(
 	GET(vkGetPhysicalDeviceProperties);
 	GET(vkGetPhysicalDeviceQueueFamilyProperties);
 	GET(vkGetPhysicalDeviceSparseImageFormatProperties);
-
-	#undef GET
-}
-
-static void load_device_pfn(
-	VkDevice                 device,
-	PFN_vkGetDeviceProcAddr  get,
-	vulkan_device_pfn       *pfn)
-{
-	#define GET(f) pfn->f = (PFN_##f)get(device, #f);
-
-	GET(vkAllocateCommandBuffers);
-	GET(vkCmdExecuteCommands);
-	GET(vkCreateCommandPool);
-	GET(vkDestroyCommandPool);
-	GET(vkDestroyDevice);
-	GET(vkFreeCommandBuffers);
-	GET(vkGetDeviceQueue);
-	GET(vkQueueSubmit);
 
 	#undef GET
 }
@@ -930,21 +908,6 @@ static const vulkan_function vulkan_instance_functions[] = {
 
 static const size_t vulkan_instance_function_count =
 	sizeof(vulkan_instance_functions) / sizeof(vulkan_instance_functions[0]);
-
-static vulkan_function vulkan_device_functions[] = {
-	{ "vkAllocateCommandBuffers", vkAllocateCommandBuffers },
-	{ "vkCmdExecuteCommands", vkCmdExecuteCommands },
-	{ "vkCreateCommandPool", vkCreateCommandPool },
-	{ "vkDestroyCommandPool", vkDestroyCommandPool },
-	{ "vkDestroyDevice", vkDestroyDevice },
-	{ "vkFreeCommandBuffers", vkFreeCommandBuffers },
-	{ "vkGetDeviceProcAddr", vkGetDeviceProcAddr },
-	{ "vkGetDeviceQueue", vkGetDeviceQueue },
-	{ "vkQueueSubmit", vkQueueSubmit },
-};
-
-static size_t vulkan_device_function_count =
-	sizeof(vulkan_device_functions) / sizeof(vulkan_device_functions[0]);
 
 PFN_vkVoidFunction WINAPI vk_icdGetInstanceProcAddr(
 	VkInstance  instance,
