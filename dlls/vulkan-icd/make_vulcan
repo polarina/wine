@@ -205,8 +205,31 @@ sub generate_trace($)
 		$params .= $name;
 	}
 
-	return "FIXME(\"($format): stub\\n\", $params);";
+	return "TRACE(\"($format)\\n\", $params);";
 }
+
+my %thunk_code = (
+	"VkCommandBuffer" => [
+		"\treturn commandBuffer->device->pfn.%s(commandBuffer->%s);\n"
+	],
+	"VkDevice" => [
+		"\treturn device->pfn.%s(device->%s);\n"
+	],
+	"VkQueue" => [
+		"\treturn queue->device->pfn.%s(queue->%s);\n"
+	],
+);
+
+my %thunk_prelude_code = (
+	"vkCreateCommandPool" => "",
+	"vkDestroyCommandPool" => "",
+
+	"vkCreateDescriptorPool" => "",
+	"vkDestroyDescriptorPool" => "",
+
+	"vkCreatePipelineCache" => "",
+	"vkDestroyPipelineCache" => "",
+);
 
 sub generate_thunk_header($$)
 {
@@ -252,10 +275,23 @@ sub generate_thunk($$)
 	$code .= "{\n";
 	$code .= "\t" . generate_trace($func_ref->[1]) . "\n";
 
-	if ($func_ref->[0] ne 'void') {
-		$code .= "\treturn VK_SUCCESS;\n";
+	my $args = '';
+
+	for (my $i = 0; $i < @{$func_ref->[1]}; $i++) {
+		my $name = $func_ref->[1]->[$i]->[1];
+
+		if ($args ne '') {
+			$args .= ', ';
+		}
+
+		if ($name eq 'pAllocator') {
+			$args .= 'NULL';
+		} else {
+			$args .= $name;
+		}
 	}
 
+	$code .= sprintf $thunk_code{$func_ref->[1]->[0]->[0]}->[0], $name, $args;
 	$code .= "}\n";
 
 	return $code;
