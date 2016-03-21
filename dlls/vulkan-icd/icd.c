@@ -87,6 +87,7 @@ static void load_device_pfn(
 	GET(vkCmdExecuteCommands);
 	GET(vkDestroyDevice);
 	GET(vkGetDeviceQueue);
+	GET(vkQueueSubmit);
 
 	#undef GET
 }
@@ -628,6 +629,83 @@ void WINAPI vkGetDeviceQueue(
 	*pQueue = &device->queueFamilies[queueFamilyIndex][queueIndex];
 }
 
+VkResult WINAPI vkQueueSubmit(
+	VkQueue             queue,
+	uint32_t            submitCount,
+	const VkSubmitInfo *pSubmits,
+	VkFence             fence)
+{
+	VkSubmitInfo *submits;
+	VkCommandBuffer *commandBuffers;
+	VkCommandBuffer *commandBufferIter;
+	VkResult result;
+	uint32_t commandBufferCount = 0;
+	uint32_t i;
+	uint32_t j;
+
+	TRACE("(%p, %u, %p, "DBGDYNF")\n", queue, submitCount, pSubmits, DBGDYNV(fence));
+
+	for (i = 0; i < submitCount; ++i)
+	{
+		commandBufferCount += pSubmits[i].commandBufferCount;
+	}
+
+	if (commandBufferCount == 0)
+	{
+		return queue->device->pfn.vkQueueSubmit(
+			queue->queue,
+			submitCount,
+			pSubmits,
+			fence);
+	}
+
+	submits = allocator_allocate(
+		queue->device->instance->pAllocator,
+		sizeof(*submits) * submitCount,
+		8, /* alignof(*submits) */
+		VK_SYSTEM_ALLOCATION_SCOPE_COMMAND);
+
+	if (submits == NULL)
+		return VK_ERROR_OUT_OF_HOST_MEMORY;
+
+	commandBuffers = allocator_allocate(
+		queue->device->instance->pAllocator,
+		sizeof(*commandBuffers) * commandBufferCount,
+		8, /* alignof(*commandBuffers) */
+	   VK_SYSTEM_ALLOCATION_SCOPE_COMMAND);
+
+	if (commandBuffers == NULL)
+	{
+		allocator_free(queue->device->instance->pAllocator, submits);
+		return VK_ERROR_OUT_OF_HOST_MEMORY;
+	}
+
+	memcpy(submits, pSubmits, sizeof(*submits) * submitCount);
+	commandBufferIter = commandBuffers;
+
+	for (i = 0; i < submitCount; ++i)
+	{
+		for (j = 0; j < submits[i].commandBufferCount; ++j)
+		{
+			commandBufferIter[j] = submits[i].pCommandBuffers[j]->commandBuffer;
+		}
+
+		submits[i].pCommandBuffers = commandBufferIter;
+		commandBufferIter += submits[i].commandBufferCount;
+	}
+
+	result = queue->device->pfn.vkQueueSubmit(
+		queue->queue,
+		submitCount,
+		submits,
+		fence);
+
+	allocator_free(queue->device->instance->pAllocator, commandBuffers);
+	allocator_free(queue->device->instance->pAllocator, submits);
+
+	return result;
+}
+
 static const vulkan_function vulkan_instance_functions[] = {
 	{ "vkCreateDevice", vkCreateDevice },
 	{ "vkCreateInstance", vkCreateInstance },
@@ -653,6 +731,7 @@ static vulkan_function vulkan_device_functions[] = {
 	{ "vkDestroyDevice", vkDestroyDevice },
 	{ "vkGetDeviceProcAddr", vkGetDeviceProcAddr },
 	{ "vkGetDeviceQueue", vkGetDeviceQueue },
+	{ "vkQueueSubmit", vkQueueSubmit },
 };
 
 static size_t vulkan_device_function_count =
