@@ -84,10 +84,12 @@ static void load_device_pfn(
 {
 	#define GET(f) pfn->f = (PFN_##f)get(device, #f);
 
+	GET(vkAllocateCommandBuffers);
 	GET(vkCmdExecuteCommands);
 	GET(vkCreateCommandPool);
 	GET(vkDestroyCommandPool);
 	GET(vkDestroyDevice);
+	GET(vkFreeCommandBuffers);
 	GET(vkGetDeviceQueue);
 	GET(vkQueueSubmit);
 
@@ -655,6 +657,101 @@ void WINAPI vkDestroyCommandPool(
 		allocator_callbacks(allocatorp, &callbacks));
 }
 
+VkResult WINAPI vkAllocateCommandBuffers(
+	VkDevice                           device,
+	const VkCommandBufferAllocateInfo *pAllocateInfo,
+	VkCommandBuffer                   *pCommandBuffers)
+{
+	VkCommandBuffer *commandBuffers;
+	VkResult result;
+	uint32_t i;
+
+	TRACE("(%p, %p, %p)\n", device, pAllocateInfo, pCommandBuffers);
+
+	commandBuffers = allocator_allocate(
+		device->pAllocator,
+		sizeof(*commandBuffers) * pAllocateInfo->commandBufferCount,
+		8, /* alignof(*commandBuffers) */
+		VK_SYSTEM_ALLOCATION_SCOPE_COMMAND);
+
+	if (commandBuffers == NULL)
+		return VK_ERROR_OUT_OF_HOST_MEMORY;
+
+	for (i = 0; i < pAllocateInfo->commandBufferCount; ++i)
+	{
+		commandBuffers[i] = allocator_allocate(
+			device->pAllocator,
+			sizeof(*commandBuffers[0]),
+			8, /* alignof(*commandBuffers[i]) */
+			VK_SYSTEM_ALLOCATION_SCOPE_OBJECT);
+
+		if (commandBuffers[i] == NULL)
+		{
+			while (i > 0)
+			{
+				allocator_free(device->pAllocator, commandBuffers[--i]);
+			}
+
+			allocator_free(device->pAllocator, commandBuffers);
+
+			return VK_ERROR_OUT_OF_HOST_MEMORY;
+		}
+	}
+
+	result = device->pfn.vkAllocateCommandBuffers(
+		device->device,
+		pAllocateInfo,
+		pCommandBuffers);
+
+	if (result != VK_SUCCESS)
+	{
+		for (i = 0; i < pAllocateInfo->commandBufferCount; ++i)
+		{
+			allocator_free(device->pAllocator, commandBuffers[i]);
+		}
+
+		allocator_free(device->pAllocator, commandBuffers);
+
+		return result;
+	}
+
+	for (i = 0; i < pAllocateInfo->commandBufferCount; ++i)
+	{
+		VkCommandBuffer commandBuffer = pCommandBuffers[i];
+		pCommandBuffers[i] = commandBuffers[i];
+
+		set_loader_magic_value(&pCommandBuffers[i]->loader_data);
+		pCommandBuffers[i]->device = device;
+		pCommandBuffers[i]->commandBuffer = commandBuffer;
+	}
+
+	allocator_free(device->pAllocator, commandBuffers);
+
+	return result;
+}
+
+void WINAPI vkFreeCommandBuffers(
+	VkDevice               device,
+	VkCommandPool          commandPool,
+	uint32_t               commandBufferCount,
+	const VkCommandBuffer *pCommandBuffers)
+{
+	TRACE("(%p, "DBGDYNF", %u, %p)\n", device, DBGDYNV(commandPool), commandBufferCount, pCommandBuffers);
+
+	while (commandBufferCount > 0)
+	{
+		VkCommandBuffer commandBuffer = pCommandBuffers[--commandBufferCount];
+
+		device->pfn.vkFreeCommandBuffers(
+			device->device,
+			commandPool,
+			1,
+			&commandBuffer->commandBuffer);
+
+		allocator_free(device->pAllocator, commandBuffer);
+	}
+}
+
 void WINAPI vkCmdExecuteCommands(
 	VkCommandBuffer        commandBuffer,
 	uint32_t               commandBufferCount,
@@ -793,10 +890,12 @@ static const size_t vulkan_instance_function_count =
 	sizeof(vulkan_instance_functions) / sizeof(vulkan_instance_functions[0]);
 
 static vulkan_function vulkan_device_functions[] = {
+	{ "vkAllocateCommandBuffers", vkAllocateCommandBuffers },
 	{ "vkCmdExecuteCommands", vkCmdExecuteCommands },
 	{ "vkCreateCommandPool", vkCreateCommandPool },
 	{ "vkDestroyCommandPool", vkDestroyCommandPool },
 	{ "vkDestroyDevice", vkDestroyDevice },
+	{ "vkFreeCommandBuffers", vkFreeCommandBuffers },
 	{ "vkGetDeviceProcAddr", vkGetDeviceProcAddr },
 	{ "vkGetDeviceQueue", vkGetDeviceQueue },
 	{ "vkQueueSubmit", vkQueueSubmit },

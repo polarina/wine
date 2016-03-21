@@ -10,6 +10,14 @@
 
 #include "allocator.h"
 
+#if defined(__LP64__) || defined(_WIN64) || defined(__x86_64__) || defined(_M_X64) || defined(__ia64) || defined (_M_IA64) || defined(__aarch64__) || defined(__powerpc64__)
+	#define DBGDYNF "%p"
+	#define DBGDYNV(x) x
+#else
+	#define DBGDYNF "0x%04x%04x"
+	#define DBGDYNV(x) x >> 32, x & 0xffffffff
+#endif
+
 typedef struct {
 	PFN_vkCreateInstance vkCreateInstance;
 } vulkan_global_pfn;
@@ -29,13 +37,21 @@ typedef struct {
 } vulkan_instance_pfn;
 
 typedef struct {
+	PFN_vkAllocateCommandBuffers vkAllocateCommandBuffers;
 	PFN_vkCmdExecuteCommands vkCmdExecuteCommands;
 	PFN_vkCreateCommandPool vkCreateCommandPool;
 	PFN_vkDestroyCommandPool vkDestroyCommandPool;
 	PFN_vkDestroyDevice vkDestroyDevice;
+	PFN_vkFreeCommandBuffers vkFreeCommandBuffers;
 	PFN_vkGetDeviceQueue vkGetDeviceQueue;
 	PFN_vkQueueSubmit vkQueueSubmit;
 } vulkan_device_pfn;
+
+struct VkCommandBuffer_T {
+	VK_LOADER_DATA loader_data;
+	VkDevice device;
+	VkCommandBuffer commandBuffer;
+};
 
 struct VkDevice_T {
 	VK_LOADER_DATA loader_data;
