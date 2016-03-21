@@ -187,6 +187,19 @@ void WINAPI vkDestroyInstance(
 	allocator_free(allocatorp, instance);
 }
 
+VkResult WINAPI vkEnumerateDeviceExtensionProperties(
+	VkPhysicalDevice       physicalDevice,
+	const char            *pLayerName,
+	uint32_t              *pPropertyCount,
+	VkExtensionProperties *pProperties)
+{
+	TRACE("(%p, %s, %p, %p)\n", physicalDevice, pLayerName, pPropertyCount, pProperties);
+
+	*pPropertyCount = 0;
+
+	return VK_SUCCESS;
+}
+
 VkResult WINAPI vkEnumerateInstanceExtensionProperties(
 	const char              *pLayerName,
 	uint32_t                *pPropertyCount,
@@ -493,6 +506,7 @@ static const vulkan_function vulkan_instance_functions[] = {
 	{ "vkCreateDevice", vkCreateDevice },
 	{ "vkCreateInstance", vkCreateInstance },
 	{ "vkDestroyInstance", vkDestroyInstance },
+	{ "vkEnumerateDeviceExtensionProperties", vkEnumerateDeviceExtensionProperties },
 	{ "vkEnumerateInstanceExtensionProperties", vkEnumerateInstanceExtensionProperties },
 	{ "vkEnumeratePhysicalDevices", vkEnumeratePhysicalDevices },
 	{ "vkGetDeviceProcAddr", vkGetDeviceProcAddr },
