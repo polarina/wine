@@ -32,6 +32,9 @@
 
 #define SONAME_LIBVULKAN "libvulkan.so.1"
 
+static vulkan_function vulkan_device_functions[];
+static size_t vulkan_device_function_count;
+
 WINE_DEFAULT_DEBUG_CHANNEL(vulkan_icd);
 
 static int compar(const void *elt_a, const void *elt_b)
@@ -271,6 +274,28 @@ VkResult WINAPI vkEnumeratePhysicalDevices(
 	return VK_SUCCESS;
 }
 
+PFN_vkVoidFunction WINAPI vkGetDeviceProcAddr(
+	VkDevice    device,
+	const char *pName)
+{
+	vulkan_function func;
+	const vulkan_function *func_ret;
+
+	TRACE("(%p, %s)\n", device, pName);
+
+	func.pName = pName;
+	func.pfn = NULL;
+
+	func_ret = bsearch(
+		&func,
+		vulkan_device_functions,
+		vulkan_device_function_count,
+		sizeof(vulkan_device_functions[0]),
+		compar);
+
+	return func_ret ? func_ret->pfn : NULL;
+}
+
 void WINAPI vkGetPhysicalDeviceFeatures(
 	VkPhysicalDevice          physicalDevice,
 	VkPhysicalDeviceFeatures *pFeatures)
@@ -379,6 +404,7 @@ static const vulkan_function vulkan_instance_functions[] = {
 	{ "vkDestroyInstance", vkDestroyInstance },
 	{ "vkEnumerateInstanceExtensionProperties", vkEnumerateInstanceExtensionProperties },
 	{ "vkEnumeratePhysicalDevices", vkEnumeratePhysicalDevices },
+	{ "vkGetDeviceProcAddr", vkGetDeviceProcAddr },
 	{ "vkGetPhysicalDeviceFeatures", vkGetPhysicalDeviceFeatures },
 	{ "vkGetPhysicalDeviceFormatProperties", vkGetPhysicalDeviceFormatProperties },
 	{ "vkGetPhysicalDeviceImageFormatProperties", vkGetPhysicalDeviceImageFormatProperties },
@@ -390,6 +416,13 @@ static const vulkan_function vulkan_instance_functions[] = {
 
 static const size_t vulkan_instance_function_count =
 	sizeof(vulkan_instance_functions) / sizeof(vulkan_instance_functions[0]);
+
+static vulkan_function vulkan_device_functions[] = {
+	{ "vkGetDeviceProcAddr", vkGetDeviceProcAddr },
+};
+
+static size_t vulkan_device_function_count =
+	sizeof(vulkan_device_functions) / sizeof(vulkan_device_functions[0]);
 
 PFN_vkVoidFunction WINAPI vk_icdGetInstanceProcAddr(
 	VkInstance  instance,
