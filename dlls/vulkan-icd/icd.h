@@ -16,6 +16,7 @@ typedef struct {
 
 typedef struct {
 	PFN_vkDestroyInstance vkDestroyInstance;
+	PFN_vkEnumeratePhysicalDevices vkEnumeratePhysicalDevices;
 } vulkan_instance_pfn;
 
 struct VkInstance_T {
@@ -26,8 +27,17 @@ struct VkInstance_T {
 	struct allocator *pAllocator;
 	struct allocator allocator;
 
+	uint32_t physicalDeviceCount;
+	VkPhysicalDevice physicalDevices;
+
 	vulkan_global_pfn pfng;
 	vulkan_instance_pfn pfn;
+};
+
+struct VkPhysicalDevice_T {
+	VK_LOADER_DATA loader_data;
+	VkInstance instance;
+	VkPhysicalDevice physicalDevice;
 };
 
 typedef struct {

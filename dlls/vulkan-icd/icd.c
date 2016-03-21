@@ -60,6 +60,7 @@ static void load_instance_pfn(
 	#define GET(f) pfn->f = (PFN_##f)get(instance, #f)
 
 	GET(vkDestroyInstance);
+	GET(vkEnumeratePhysicalDevices);
 
 	#undef GET
 }
@@ -94,6 +95,8 @@ VkResult WINAPI vkCreateInstance(
 
 	set_loader_magic_value(&instance->loader_data);
 	instance->pAllocator = allocator_initialize(pAllocator, NULL, &instance->allocator);
+	instance->physicalDeviceCount = 0;
+	instance->physicalDevices = NULL;
 	instance->libvulkan_handle = wine_dlopen(SONAME_LIBVULKAN, RTLD_NOW, NULL, 0);
 
 	if (instance->libvulkan_handle == NULL)
@@ -156,6 +159,7 @@ void WINAPI vkDestroyInstance(
 		allocator_callbacks(allocatorp, &callbacks));
 
 	wine_dlclose(instance->libvulkan_handle, NULL, 0);
+	allocator_free(allocatorp, instance->physicalDevices);
 	allocator_free(allocatorp, instance);
 }
 
@@ -171,10 +175,100 @@ VkResult WINAPI vkEnumerateInstanceExtensionProperties(
 	return VK_SUCCESS;
 }
 
+VkResult WINAPI vkEnumeratePhysicalDevices(
+	VkInstance        instance,
+	uint32_t         *pPhysicalDeviceCount,
+	VkPhysicalDevice *pPhysicalDevices)
+{
+	uint32_t i;
+
+	TRACE("(%p, %p, %p)\n", instance, pPhysicalDeviceCount, pPhysicalDevices);
+
+	if (instance->physicalDevices == NULL)
+	{
+		VkResult result = instance->pfn.vkEnumeratePhysicalDevices(
+			instance->instance,
+			&instance->physicalDeviceCount,
+			NULL);
+
+		if (result != VK_SUCCESS)
+			return result;
+
+		if (instance->physicalDeviceCount > 0)
+		{
+			uint32_t i;
+
+			VkPhysicalDevice *physicalDevices = allocator_allocate(
+				instance->pAllocator,
+				sizeof(*physicalDevices) * instance->physicalDeviceCount,
+				8, /* alignof(*physicalDevices) */
+				VK_SYSTEM_ALLOCATION_SCOPE_COMMAND);
+
+			if (physicalDevices == NULL)
+				return VK_ERROR_OUT_OF_HOST_MEMORY;
+
+			instance->physicalDevices = allocator_allocate(
+				instance->pAllocator,
+				sizeof(*instance->physicalDevices) * instance->physicalDeviceCount,
+				8, /* alignof(*instance->physicalDevices) */
+				VK_SYSTEM_ALLOCATION_SCOPE_INSTANCE);
+
+			if (instance->physicalDevices == NULL)
+			{
+				allocator_free(instance->pAllocator, physicalDevices);
+
+				return VK_ERROR_OUT_OF_HOST_MEMORY;
+			}
+
+			result = instance->pfn.vkEnumeratePhysicalDevices(
+				instance->instance,
+				&instance->physicalDeviceCount,
+				physicalDevices);
+
+			if (result != VK_SUCCESS)
+			{
+				allocator_free(instance->pAllocator, instance->physicalDevices);
+				allocator_free(instance->pAllocator, physicalDevices);
+				instance->physicalDevices = NULL;
+
+				return result;
+			}
+
+			for (i = 0; i < instance->physicalDeviceCount; ++i)
+			{
+				VkPhysicalDevice dev = &instance->physicalDevices[i];
+
+				set_loader_magic_value(&dev->loader_data);
+				dev->instance = instance;
+				dev->physicalDevice = physicalDevices[i];
+			}
+
+			allocator_free(instance->pAllocator, physicalDevices);
+		}
+	}
+
+	if (pPhysicalDevices == NULL)
+	{
+		*pPhysicalDeviceCount = instance->physicalDeviceCount;
+
+		return VK_SUCCESS;
+	}
+
+	*pPhysicalDeviceCount = min(*pPhysicalDeviceCount, instance->physicalDeviceCount);
+
+	for (i = 0; i < *pPhysicalDeviceCount; ++i)
+	{
+		pPhysicalDevices[i] = &instance->physicalDevices[i];
+	}
+
+	return VK_SUCCESS;
+}
+
 static const vulkan_function vulkan_instance_functions[] = {
 	{ "vkCreateInstance", vkCreateInstance },
 	{ "vkDestroyInstance", vkDestroyInstance },
 	{ "vkEnumerateInstanceExtensionProperties", vkEnumerateInstanceExtensionProperties },
+	{ "vkEnumeratePhysicalDevices", vkEnumeratePhysicalDevices },
 };
 
 static const size_t vulkan_instance_function_count =
