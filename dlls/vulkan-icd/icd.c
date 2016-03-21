@@ -62,6 +62,7 @@ static void load_instance_pfn(
 	GET(vkDestroyInstance);
 	GET(vkEnumeratePhysicalDevices);
 	GET(vkGetPhysicalDeviceFeatures);
+	GET(vkGetPhysicalDeviceFormatProperties);
 	GET(vkGetPhysicalDeviceMemoryProperties);
 	GET(vkGetPhysicalDeviceProperties);
 	GET(vkGetPhysicalDeviceQueueFamilyProperties);
@@ -279,6 +280,19 @@ void WINAPI vkGetPhysicalDeviceFeatures(
 		pFeatures);
 }
 
+void WINAPI vkGetPhysicalDeviceFormatProperties(
+	VkPhysicalDevice    physicalDevice,
+	VkFormat            format,
+	VkFormatProperties *pFormatProperties)
+{
+	TRACE("(%p, %d, %p)\n", physicalDevice, format, pFormatProperties);
+
+	physicalDevice->instance->pfn.vkGetPhysicalDeviceFormatProperties(
+		physicalDevice->physicalDevice,
+		format,
+		pFormatProperties);
+}
+
 void WINAPI vkGetPhysicalDeviceMemoryProperties(
 	VkPhysicalDevice                  physicalDevice,
 	VkPhysicalDeviceMemoryProperties *pMemoryProperties)
@@ -320,6 +334,7 @@ static const vulkan_function vulkan_instance_functions[] = {
 	{ "vkEnumerateInstanceExtensionProperties", vkEnumerateInstanceExtensionProperties },
 	{ "vkEnumeratePhysicalDevices", vkEnumeratePhysicalDevices },
 	{ "vkGetPhysicalDeviceFeatures", vkGetPhysicalDeviceFeatures },
+	{ "vkGetPhysicalDeviceFormatProperties", vkGetPhysicalDeviceFormatProperties },
 	{ "vkGetPhysicalDeviceMemoryProperties", vkGetPhysicalDeviceMemoryProperties },
 	{ "vkGetPhysicalDeviceProperties", vkGetPhysicalDeviceProperties },
 	{ "vkGetPhysicalDeviceQueueFamilyProperties", vkGetPhysicalDeviceQueueFamilyProperties },
