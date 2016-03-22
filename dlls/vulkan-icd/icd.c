@@ -85,6 +85,8 @@ static void load_device_pfn(
 	#define GET(f) pfn->f = (PFN_##f)get(device, #f);
 
 	GET(vkCmdExecuteCommands);
+	GET(vkCreateCommandPool);
+	GET(vkDestroyCommandPool);
 	GET(vkDestroyDevice);
 	GET(vkGetDeviceQueue);
 	GET(vkQueueSubmit);
@@ -475,6 +477,8 @@ VkResult WINAPI vkCreateDevice(
 	device->pAllocator = allocator_initialize(
 		pAllocator, physicalDevice->instance->pAllocator, &device->allocator);
 
+	allocator_store_initialize(&device->commandPoolAllocators);
+
 	device->queueFamilyCount = maxQueueFamilyIndex + 1;
 	device->queueFamilies = allocator_allocate(
 		device->pAllocator,
@@ -587,6 +591,68 @@ void WINAPI vkDestroyDevice(
 
 	allocator_free(allocatorp, device->queueFamilies);
 	allocator_free(allocatorp, device);
+}
+
+VkResult WINAPI vkCreateCommandPool(
+	VkDevice                       device,
+	const VkCommandPoolCreateInfo *pCreateInfo,
+	const VkAllocationCallbacks   *pAllocator,
+	VkCommandPool                 *pCommandPool)
+{
+	struct allocator *allocatorp;
+	struct allocator allocator;
+	VkAllocationCallbacks callbacks;
+	VkResult result;
+
+	TRACE("(%p, %p, %p, %p)\n", device, pCreateInfo, pAllocator, pCommandPool);
+
+	allocatorp = allocator_initialize(pAllocator, device->pAllocator, &allocator);
+
+	result = device->pfn.vkCreateCommandPool(
+		device->device,
+		pCreateInfo,
+		allocator_callbacks(allocatorp, &callbacks),
+		pCommandPool);
+
+	if (result == VK_SUCCESS)
+	{
+		bool success = allocator_store_add(
+			&device->commandPoolAllocators,
+			(uint64_t)*pCommandPool,
+			allocatorp,
+			VK_SYSTEM_ALLOCATION_SCOPE_OBJECT);
+
+		if (!success)
+		{
+			device->pfn.vkDestroyCommandPool(
+				device->device,
+				*pCommandPool,
+				allocator_callbacks(allocatorp, &callbacks));
+
+			return VK_ERROR_OUT_OF_HOST_MEMORY;
+		}
+	}
+
+	return result;
+}
+
+void WINAPI vkDestroyCommandPool(
+	VkDevice                     device,
+	VkCommandPool                commandPool,
+	const VkAllocationCallbacks* pAllocator)
+{
+	struct allocator *allocatorp;
+	struct allocator allocator;
+	VkAllocationCallbacks callbacks;
+
+	TRACE("(%p, "DBGDYNF", %p)\n", device, DBGDYNV(commandPool), pAllocator);
+
+	allocatorp = allocator_initialize(pAllocator, device->pAllocator, &allocator);
+
+	device->pfn.vkDestroyCommandPool(
+		device->device,
+		commandPool,
+		allocator_callbacks(allocatorp, &callbacks));
 }
 
 void WINAPI vkCmdExecuteCommands(
@@ -728,6 +794,8 @@ static const size_t vulkan_instance_function_count =
 
 static vulkan_function vulkan_device_functions[] = {
 	{ "vkCmdExecuteCommands", vkCmdExecuteCommands },
+	{ "vkCreateCommandPool", vkCreateCommandPool },
+	{ "vkDestroyCommandPool", vkDestroyCommandPool },
 	{ "vkDestroyDevice", vkDestroyDevice },
 	{ "vkGetDeviceProcAddr", vkGetDeviceProcAddr },
 	{ "vkGetDeviceQueue", vkGetDeviceQueue },

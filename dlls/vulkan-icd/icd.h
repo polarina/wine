@@ -30,6 +30,8 @@ typedef struct {
 
 typedef struct {
 	PFN_vkCmdExecuteCommands vkCmdExecuteCommands;
+	PFN_vkCreateCommandPool vkCreateCommandPool;
+	PFN_vkDestroyCommandPool vkDestroyCommandPool;
 	PFN_vkDestroyDevice vkDestroyDevice;
 	PFN_vkGetDeviceQueue vkGetDeviceQueue;
 	PFN_vkQueueSubmit vkQueueSubmit;
@@ -42,6 +44,8 @@ struct VkDevice_T {
 
 	struct allocator *pAllocator;
 	struct allocator allocator;
+
+	struct allocator_store commandPoolAllocators;
 
 	uint32_t queueFamilyCount;
 	VkQueue *queueFamilies;
