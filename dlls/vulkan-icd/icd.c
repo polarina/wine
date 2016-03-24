@@ -51,6 +51,7 @@ static const struct instance_extension_pair icd_instance_extensions[] = {
 };
 
 static const char *icd_device_extensions[] = {
+	"VK_KHR_swapchain",
 };
 
 static const size_t icd_instance_extension_count =

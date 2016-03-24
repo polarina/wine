@@ -25,6 +25,7 @@ use XML::Simple;
 
 my %supported_extensions = (
 	"VK_VERSION_1_0" => 1,
+	"VK_KHR_swapchain" => 1,
 );
 
 sub parse_variable($)
@@ -169,6 +170,7 @@ my %debug_conv_dyn = (
 	"VkSampler" => 1,
 	"VkSemaphore" => 1,
 	"VkShaderModule" => 1,
+	"VkSwapchainKHR" => 1,
 );
 
 sub generate_trace($)
