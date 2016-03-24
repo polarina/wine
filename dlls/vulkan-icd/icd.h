@@ -18,6 +18,7 @@ typedef struct {
 typedef struct {
 	PFN_vkCreateDevice vkCreateDevice;
 	PFN_vkDestroyInstance vkDestroyInstance;
+	PFN_vkDestroySurfaceKHR vkDestroySurfaceKHR;
 	PFN_vkEnumerateDeviceExtensionProperties vkEnumerateDeviceExtensionProperties;
 	PFN_vkEnumeratePhysicalDevices vkEnumeratePhysicalDevices;
 	PFN_vkGetDeviceProcAddr vkGetDeviceProcAddr;
@@ -28,6 +29,10 @@ typedef struct {
 	PFN_vkGetPhysicalDeviceProperties vkGetPhysicalDeviceProperties;
 	PFN_vkGetPhysicalDeviceQueueFamilyProperties vkGetPhysicalDeviceQueueFamilyProperties;
 	PFN_vkGetPhysicalDeviceSparseImageFormatProperties vkGetPhysicalDeviceSparseImageFormatProperties;
+	PFN_vkGetPhysicalDeviceSurfaceSupportKHR vkGetPhysicalDeviceSurfaceSupportKHR;
+	PFN_vkGetPhysicalDeviceSurfaceCapabilitiesKHR vkGetPhysicalDeviceSurfaceCapabilitiesKHR;
+	PFN_vkGetPhysicalDeviceSurfaceFormatsKHR vkGetPhysicalDeviceSurfaceFormatsKHR;
+	PFN_vkGetPhysicalDeviceSurfacePresentModesKHR vkGetPhysicalDeviceSurfacePresentModesKHR;
 } vulkan_instance_pfn;
 
 struct VkCommandBuffer_T {

@@ -40,6 +40,10 @@ struct instance_extension_pair {
 };
 
 static const struct instance_extension_pair icd_instance_extensions[] = {
+	{
+		{ "VK_KHR_surface", 25 },
+		{ "VK_KHR_surface", 25 },
+	},
 };
 
 static const char *icd_device_extensions[] = {
@@ -90,6 +94,7 @@ static void load_instance_pfn(
 
 	GET(vkCreateDevice);
 	GET(vkDestroyInstance);
+	GET(vkDestroySurfaceKHR);
 	GET(vkEnumerateDeviceExtensionProperties);
 	GET(vkEnumeratePhysicalDevices);
 	GET(vkGetDeviceProcAddr);
@@ -100,6 +105,10 @@ static void load_instance_pfn(
 	GET(vkGetPhysicalDeviceProperties);
 	GET(vkGetPhysicalDeviceQueueFamilyProperties);
 	GET(vkGetPhysicalDeviceSparseImageFormatProperties);
+	GET(vkGetPhysicalDeviceSurfaceSupportKHR);
+	GET(vkGetPhysicalDeviceSurfaceCapabilitiesKHR);
+	GET(vkGetPhysicalDeviceSurfaceFormatsKHR);
+	GET(vkGetPhysicalDeviceSurfacePresentModesKHR);
 
 	#undef GET
 }
@@ -1044,10 +1053,58 @@ VkResult WINAPI vkQueueSubmit(
 	return result;
 }
 
+void WINAPI vkDestroySurfaceKHR(
+	VkInstance                   instance,
+	VkSurfaceKHR                 surface,
+	const VkAllocationCallbacks *pAllocator)
+{
+	TRACE("(%p, "DBGDYNF", %p)\n", instance, DBGDYNV(surface), pAllocator);
+}
+
+VkResult WINAPI vkGetPhysicalDeviceSurfaceSupportKHR(
+	VkPhysicalDevice  physicalDevice,
+	uint32_t          queueFamilyIndex,
+	VkSurfaceKHR      surface,
+	VkBool32         *supported)
+{
+	TRACE("(%p, %u, "DBGDYNF", %p)\n", physicalDevice, queueFamilyIndex, DBGDYNV(surface), supported);
+	return VK_SUCCESS;
+}
+
+VkResult WINAPI vkGetPhysicalDeviceSurfaceCapabilitiesKHR(
+	VkPhysicalDevice          physicalDevice,
+	VkSurfaceKHR              surface,
+	VkSurfaceCapabilitiesKHR *pSurfaceCapabilities)
+{
+	TRACE("(%p, "DBGDYNF", %p)\n", physicalDevice, DBGDYNV(surface), pSurfaceCapabilities);
+	return VK_SUCCESS;
+}
+
+VkResult WINAPI vkGetPhysicalDeviceSurfaceFormatsKHR(
+	VkPhysicalDevice    physicalDevice,
+	VkSurfaceKHR        surface,
+	uint32_t           *pSurfaceFormatCount,
+	VkSurfaceFormatKHR *pSurfaceFormats)
+{
+	TRACE("(%p, "DBGDYNF", %p, %p)\n", physicalDevice, DBGDYNV(surface), pSurfaceFormatCount, pSurfaceFormats);
+	return VK_SUCCESS;
+}
+
+VkResult WINAPI vkGetPhysicalDeviceSurfacePresentModesKHR(
+	VkPhysicalDevice  physicalDevice,
+	VkSurfaceKHR      surface,
+	uint32_t         *pPresentModeCount,
+	VkPresentModeKHR *pPresentModes)
+{
+	TRACE("(%p, "DBGDYNF", %p, %p)\n", physicalDevice, DBGDYNV(surface), pPresentModeCount, pPresentModes);
+	return VK_SUCCESS;
+}
+
 static const vulkan_function vulkan_instance_functions[] = {
 	{ "vkCreateDevice", vkCreateDevice },
 	{ "vkCreateInstance", vkCreateInstance },
 	{ "vkDestroyInstance", vkDestroyInstance },
+	{ "vkDestroySurfaceKHR", vkDestroySurfaceKHR },
 	{ "vkEnumerateDeviceExtensionProperties", vkEnumerateDeviceExtensionProperties },
 	{ "vkEnumerateInstanceExtensionProperties", vkEnumerateInstanceExtensionProperties },
 	{ "vkEnumeratePhysicalDevices", vkEnumeratePhysicalDevices },
@@ -1059,6 +1116,10 @@ static const vulkan_function vulkan_instance_functions[] = {
 	{ "vkGetPhysicalDeviceProperties", vkGetPhysicalDeviceProperties },
 	{ "vkGetPhysicalDeviceQueueFamilyProperties", vkGetPhysicalDeviceQueueFamilyProperties },
 	{ "vkGetPhysicalDeviceSparseImageFormatProperties", vkGetPhysicalDeviceSparseImageFormatProperties },
+	{ "vkGetPhysicalDeviceSurfaceSupportKHR", vkGetPhysicalDeviceSurfaceSupportKHR },
+	{ "vkGetPhysicalDeviceSurfaceCapabilitiesKHR", vkGetPhysicalDeviceSurfaceCapabilitiesKHR },
+	{ "vkGetPhysicalDeviceSurfaceFormatsKHR", vkGetPhysicalDeviceSurfaceFormatsKHR },
+	{ "vkGetPhysicalDeviceSurfacePresentModesKHR", vkGetPhysicalDeviceSurfacePresentModesKHR },
 };
 
 static const size_t vulkan_instance_function_count =
