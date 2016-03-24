@@ -18,6 +18,7 @@ typedef struct {
 typedef struct {
 	PFN_vkCreateDevice vkCreateDevice;
 	PFN_vkDestroyInstance vkDestroyInstance;
+	PFN_vkEnumerateDeviceExtensionProperties vkEnumerateDeviceExtensionProperties;
 	PFN_vkEnumeratePhysicalDevices vkEnumeratePhysicalDevices;
 	PFN_vkGetDeviceProcAddr vkGetDeviceProcAddr;
 	PFN_vkGetPhysicalDeviceFeatures vkGetPhysicalDeviceFeatures;

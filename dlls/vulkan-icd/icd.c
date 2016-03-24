@@ -34,6 +34,35 @@
 
 WINE_DEFAULT_DEBUG_CHANNEL(vulkan_icd);
 
+struct instance_extension_pair {
+	VkExtensionProperties windows;
+	VkExtensionProperties native;
+};
+
+static const struct instance_extension_pair icd_instance_extensions[] = {
+};
+
+static const char *icd_device_extensions[] = {
+};
+
+static const size_t icd_instance_extension_count =
+	sizeof(icd_instance_extensions) / sizeof(icd_instance_extensions[0]);
+
+static const size_t icd_device_extension_count =
+	sizeof(icd_device_extensions) / sizeof(icd_device_extensions[0]);
+
+static int compar_extension(const void *elt_a, const void *elt_b)
+{
+	return strcmp((const char *) elt_a, *(const char **) elt_b);
+}
+
+static int compare_instance_extensions(const void *elt_a, const void *elt_b)
+{
+	return strcmp(
+		(const char *) elt_a,
+		((struct instance_extension_pair *) elt_b)->native.extensionName);
+}
+
 static int compar(const void *elt_a, const void *elt_b)
 {
 	return strcmp(
@@ -61,6 +90,7 @@ static void load_instance_pfn(
 
 	GET(vkCreateDevice);
 	GET(vkDestroyInstance);
+	GET(vkEnumerateDeviceExtensionProperties);
 	GET(vkEnumeratePhysicalDevices);
 	GET(vkGetDeviceProcAddr);
 	GET(vkGetPhysicalDeviceFeatures);
@@ -84,14 +114,51 @@ VkResult WINAPI vkCreateInstance(
 	VkAllocationCallbacks callbacks;
 	struct allocator allocator;
 	PFN_vkGetInstanceProcAddr pfn_vkGetInstanceProcAddr;
+	VkInstanceCreateInfo createInfo;
+	uint32_t i;
+	uint32_t j;
+	uint32_t enabledExtensionCount = 0;
+	const char *enabledExtensions
+		[sizeof(icd_instance_extensions) / sizeof(icd_instance_extensions[0])];
 
 	TRACE("(%p, %p, %p)\n", pCreateInfo, pAllocator, pInstance);
 
 	if (pCreateInfo->enabledLayerCount > 0)
 		return VK_ERROR_LAYER_NOT_PRESENT;
 
-	if (pCreateInfo->enabledExtensionCount > 0)
-		return VK_ERROR_EXTENSION_NOT_PRESENT;
+	for (i = 0; i < pCreateInfo->enabledExtensionCount; ++i)
+	{
+		bool exists = false;
+
+		struct instance_extension_pair *ext = bsearch(
+			pCreateInfo->ppEnabledExtensionNames[i],
+			icd_instance_extensions,
+			icd_instance_extension_count,
+			sizeof(icd_instance_extensions[0]),
+			compare_instance_extensions);
+
+		if (ext == NULL)
+			return VK_ERROR_EXTENSION_NOT_PRESENT;
+
+		for (j = 0; j < enabledExtensionCount; ++j)
+		{
+			if (strcmp(enabledExtensions[j], ext->native.extensionName) == 0)
+			{
+				exists = true;
+
+				break;
+			}
+		}
+
+		if (exists)
+			continue;
+
+		enabledExtensions[enabledExtensionCount++] = ext->native.extensionName;
+	}
+
+	createInfo = *pCreateInfo;
+	createInfo.enabledExtensionCount = enabledExtensionCount;
+	createInfo.ppEnabledExtensionNames = enabledExtensions;
 
 	instance = allocator_allocate(
 		allocator_initialize(pAllocator, NULL, &allocator),
@@ -132,7 +199,7 @@ VkResult WINAPI vkCreateInstance(
 	load_global_pfn(pfn_vkGetInstanceProcAddr, &instance->pfng);
 
 	result = instance->pfng.vkCreateInstance(
-		pCreateInfo,
+		&createInfo,
 		allocator_callbacks(instance->pAllocator, &callbacks),
 		&instance->instance);
 
@@ -178,9 +245,78 @@ VkResult WINAPI vkEnumerateDeviceExtensionProperties(
 	uint32_t              *pPropertyCount,
 	VkExtensionProperties *pProperties)
 {
+	uint32_t hostPropertyCount;
+	uint32_t supportedPropertyCount = 0;
+	VkExtensionProperties *properties;
+	VkResult result;
+	uint32_t i;
+
 	TRACE("(%p, %s, %p, %p)\n", physicalDevice, pLayerName, pPropertyCount, pProperties);
 
-	*pPropertyCount = 0;
+	result = physicalDevice->instance->pfn.vkEnumerateDeviceExtensionProperties(
+		physicalDevice->physicalDevice,
+		pLayerName,
+		&hostPropertyCount,
+		NULL);
+
+	if (result != VK_SUCCESS)
+		return result;
+
+	properties = allocator_allocate(
+		physicalDevice->instance->pAllocator,
+		sizeof(*properties) * hostPropertyCount,
+		8, /* alignof(*properties) */
+		VK_SYSTEM_ALLOCATION_SCOPE_COMMAND);
+
+	if (properties == NULL)
+		return VK_ERROR_OUT_OF_HOST_MEMORY;
+
+	result = physicalDevice->instance->pfn.vkEnumerateDeviceExtensionProperties(
+		physicalDevice->physicalDevice,
+		pLayerName,
+		&hostPropertyCount,
+		properties);
+
+	if (result != VK_SUCCESS)
+	{
+		allocator_free(physicalDevice->instance->pAllocator, properties);
+
+		return result;
+	}
+
+	for (i = 0; i < hostPropertyCount; ++i)
+	{
+		void *extension = bsearch(
+			properties[i].extensionName,
+			icd_device_extensions,
+			icd_device_extension_count,
+			sizeof(icd_device_extensions[0]),
+			compar_extension);
+
+		if (extension == NULL)
+			continue;
+
+		if (pProperties != NULL && supportedPropertyCount < *pPropertyCount)
+		{
+			pProperties[supportedPropertyCount] = properties[i];
+		}
+
+		++supportedPropertyCount;
+	}
+
+	allocator_free(physicalDevice->instance->pAllocator, properties);
+
+	if (pProperties == NULL)
+	{
+		*pPropertyCount = supportedPropertyCount;
+
+		return VK_SUCCESS;
+	}
+
+	*pPropertyCount = min(supportedPropertyCount, *pPropertyCount);
+
+	if (*pPropertyCount < supportedPropertyCount)
+		return VK_INCOMPLETE;
 
 	return VK_SUCCESS;
 }
@@ -190,11 +326,30 @@ VkResult WINAPI vkEnumerateInstanceExtensionProperties(
 	uint32_t                *pPropertyCount,
 	VkExtensionProperties   *pProperties)
 {
+	VkResult result = VK_SUCCESS;
+
 	TRACE("(%s, %p, %p)\n", pLayerName, pPropertyCount, pProperties);
 
-	*pPropertyCount = 0;
+	if (pProperties == NULL)
+	{
+		*pPropertyCount = icd_instance_extension_count;
 
-	return VK_SUCCESS;
+		return VK_SUCCESS;
+	}
+
+	if (*pPropertyCount < icd_instance_extension_count)
+	{
+		result = VK_INCOMPLETE;
+	}
+
+	*pPropertyCount = min(*pPropertyCount, icd_instance_extension_count);
+
+	memcpy(
+		pProperties,
+		icd_instance_extensions,
+		sizeof(*pProperties) * *pPropertyCount);
+
+	return result;
 }
 
 VkResult WINAPI vkEnumeratePhysicalDevices(
