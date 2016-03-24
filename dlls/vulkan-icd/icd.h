@@ -5,6 +5,8 @@
 #include <stdint.h>
 
 #define VK_NO_PROTOTYPES
+#define VK_USE_PLATFORM_WIN32_KHR
+#define VK_USE_PLATFORM_XLIB_KHR
 #include "vk_icd.h"
 #include "vulkan.h"
 
@@ -17,6 +19,7 @@ typedef struct {
 
 typedef struct {
 	PFN_vkCreateDevice vkCreateDevice;
+	PFN_vkCreateXlibSurfaceKHR vkCreateXlibSurfaceKHR;
 	PFN_vkDestroyInstance vkDestroyInstance;
 	PFN_vkDestroySurfaceKHR vkDestroySurfaceKHR;
 	PFN_vkEnumerateDeviceExtensionProperties vkEnumerateDeviceExtensionProperties;
@@ -33,6 +36,7 @@ typedef struct {
 	PFN_vkGetPhysicalDeviceSurfaceCapabilitiesKHR vkGetPhysicalDeviceSurfaceCapabilitiesKHR;
 	PFN_vkGetPhysicalDeviceSurfaceFormatsKHR vkGetPhysicalDeviceSurfaceFormatsKHR;
 	PFN_vkGetPhysicalDeviceSurfacePresentModesKHR vkGetPhysicalDeviceSurfacePresentModesKHR;
+	PFN_vkGetPhysicalDeviceXlibPresentationSupportKHR vkGetPhysicalDeviceXlibPresentationSupportKHR;
 } vulkan_instance_pfn;
 
 struct VkCommandBuffer_T {

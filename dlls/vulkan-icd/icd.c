@@ -44,6 +44,10 @@ static const struct instance_extension_pair icd_instance_extensions[] = {
 		{ "VK_KHR_surface", 25 },
 		{ "VK_KHR_surface", 25 },
 	},
+	{
+		{ "VK_KHR_win32_surface", 5 },
+		{ "VK_KHR_xlib_surface", 6 },
+	},
 };
 
 static const char *icd_device_extensions[] = {
@@ -93,6 +97,7 @@ static void load_instance_pfn(
 	#define GET(f) pfn->f = (PFN_##f)get(instance, #f)
 
 	GET(vkCreateDevice);
+	GET(vkCreateXlibSurfaceKHR);
 	GET(vkDestroyInstance);
 	GET(vkDestroySurfaceKHR);
 	GET(vkEnumerateDeviceExtensionProperties);
@@ -109,6 +114,7 @@ static void load_instance_pfn(
 	GET(vkGetPhysicalDeviceSurfaceCapabilitiesKHR);
 	GET(vkGetPhysicalDeviceSurfaceFormatsKHR);
 	GET(vkGetPhysicalDeviceSurfacePresentModesKHR);
+	GET(vkGetPhysicalDeviceXlibPresentationSupportKHR);
 
 	#undef GET
 }
@@ -1100,9 +1106,28 @@ VkResult WINAPI vkGetPhysicalDeviceSurfacePresentModesKHR(
 	return VK_SUCCESS;
 }
 
+VkResult WINAPI vkCreateWin32SurfaceKHR(
+	VkInstance                         instance,
+	const VkWin32SurfaceCreateInfoKHR *pCreateInfo,
+	const VkAllocationCallbacks       *pAllocator,
+	VkSurfaceKHR                      *pSurface)
+{
+	TRACE("(%p, %p, %p, "DBGDYNF")\n", instance, pCreateInfo, pAllocator, pSurface);
+	return VK_SUCCESS;
+}
+
+VkBool32 WINAPI vkGetPhysicalDeviceWin32PresentationSupportKHR(
+	VkPhysicalDevice physicalDevice,
+	uint32_t         queueFamilyIndex)
+{
+	TRACE("(%p, %u)\n", physicalDevice, queueFamilyIndex);
+	return false;
+}
+
 static const vulkan_function vulkan_instance_functions[] = {
 	{ "vkCreateDevice", vkCreateDevice },
 	{ "vkCreateInstance", vkCreateInstance },
+	{ "vkCreateWin32SurfaceKHR", vkCreateWin32SurfaceKHR },
 	{ "vkDestroyInstance", vkDestroyInstance },
 	{ "vkDestroySurfaceKHR", vkDestroySurfaceKHR },
 	{ "vkEnumerateDeviceExtensionProperties", vkEnumerateDeviceExtensionProperties },
@@ -1120,6 +1145,7 @@ static const vulkan_function vulkan_instance_functions[] = {
 	{ "vkGetPhysicalDeviceSurfaceCapabilitiesKHR", vkGetPhysicalDeviceSurfaceCapabilitiesKHR },
 	{ "vkGetPhysicalDeviceSurfaceFormatsKHR", vkGetPhysicalDeviceSurfaceFormatsKHR },
 	{ "vkGetPhysicalDeviceSurfacePresentModesKHR", vkGetPhysicalDeviceSurfacePresentModesKHR },
+	{ "vkGetPhysicalDeviceWin32PresentationSupportKHR", vkGetPhysicalDeviceWin32PresentationSupportKHR },
 };
 
 static const size_t vulkan_instance_function_count =
